@@ -38,9 +38,9 @@ datamodule:
   _target_: contrib.glorys12.DistinctNormDataModule
   input_da:
     _target_: contrib.glorys12.load_glorys12_data
-    tgt_path: /Odyssey/public/glorys/reanalysis/glorys4_2010_2019_sla.nc
+    tgt_path: /Odyssey/public/glorys/reanalysis/glorys12_2010_2019_daily_sla_4th.nc
     tgt_var: sla
-    inp_path: /Odyssey/public/glorys/input/glorys4_2010_2019_input_sla.nc
+    inp_path: /Odyssey/public/glorys/reanalysis/glorys12_2010_2019_daily_sla_4th_input.nc
     inp_var: sla
   domains:
     train:
