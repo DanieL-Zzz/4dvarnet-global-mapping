@@ -1,0 +1,40 @@
+# @package _global_
+
+xpname: ttt
+
+trainer:
+  max_epochs: 350
+  limit_train_batches: 1000
+
+datamodule:
+  input_da:
+    _target_: contrib.glorys12.load_glorys12_data_on_fly_inp
+    tgt_path: /SCRATCH/d22zhu/glorys12_2010_2019_daily_sla_4th.nc
+    tgt_var: sla
+    inp_path: /SCRATCH/d22zhu/mask_6nadirs_4th.nc
+    inp_var: inp
+  xrds_kw:
+    train:
+      patch_dims: {time: 15, lat: 48, lon: 48}
+      strides: {time: 1, lat: 40, lon: 40}
+      domain_limits: ${domain.train}
+      noise: .03
+    val:
+      patch_dims: {time: 15, lat: 48, lon: 48}
+      strides: {time: 1, lat: 40, lon: 40}
+      domain_limits: ${domain.train}
+      noise: .03
+  dl_kw: {batch_size: 64, num_workers: 4}
+
+model:
+  opt_fn:
+    lr: 3e-4
+  solver:
+    _target_: ocean4dvarnet.models.GradSolver
+    n_step: 10
+    prior_cost:
+      downsamp: null
+
+defaults:
+  - glo12-sla
+  - _self_
