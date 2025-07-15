@@ -30,7 +30,7 @@ class DistinctNormDataModule(BaseDataModule):
 
         self.input_mask = None
         if isinstance(self.input_da, (tuple, list)):
-            self.input_da, self.input_mask = self.input_da[0], self.input_da[1]
+            self.input_da, self.input_mask, self.val_data = self.input_da
 
     def norm_stats(self):
         if self._norm_stats is None:
@@ -60,12 +60,20 @@ class DistinctNormDataModule(BaseDataModule):
             postpro_fn=self.post_fn("train"),
             mask=self.input_mask,
         )
-        self.val_ds = LazyXrDataset(
-            self.input_da.sel(self.domains["val"]),
-            **self.xrds_kw["val"],
-            postpro_fn=self.post_fn("val"),
-            mask=self.input_mask,
-        )
+
+        if self.val_data is not None:
+            self.val_ds = LazyXrDataset(
+                self.val_data.sel(self.domains['val']),
+                **self.xrds_kw['val'],
+                postpro_fn=self.post_fn('val'),
+            )
+        else:
+            self.val_ds = LazyXrDataset(
+                self.input_da.sel(self.domains["val"]),
+                **self.xrds_kw["val"],
+                postpro_fn=self.post_fn("val"),
+                mask=self.input_mask,
+            )
 
 
 class LazyXrDataset(torch.utils.data.Dataset):
@@ -280,23 +288,33 @@ def load_glorys12_data(tgt_path, inp_path, tgt_var="zos", inp_var="input"):
 
 
 def load_glorys12_data_on_fly_inp(
-    tgt_path,
-    inp_path,
-    tgt_var="zos",
-    inp_var="input",
+    tgt_path, inp_path, tgt_var='zos', inp_var='input', val_path=None,
 ):
     isel = None  # dict(time=slice(-365 * 2, None))
 
     tgt = (
-        xr.open_dataset(tgt_path)[tgt_var].isel(isel)
+        xr.open_dataset(tgt_path)[tgt_var]
+        .isel(isel)
         # .rename(latitude='lat', longitude='lon')
     )
     inp = (
-        xr.open_dataset(inp_path)[inp_var].isel(isel)
+        xr.open_dataset(inp_path)[inp_var]
+        .isel(isel)
         # .rename(latitude='lat', longitude='lon')
     )
 
-    return tgt, inp
+    val = None
+    if val_path:
+        val = (
+            xr.open_dataset(val_path)
+            .rename(
+                obs='input', ref='tgt', latitude='lat', longitude='lon',
+            )
+            .to_array()
+            .sortby('variable')
+        )
+
+    return tgt, inp, val
 
 
 def train(trainer, dm, lit_mod, ckpt=None):
