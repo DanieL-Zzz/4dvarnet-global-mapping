@@ -4,7 +4,7 @@ xpname: ttt
 
 trainer:
   max_epochs: 350
-  limit_train_batches: 1000
+  limit_train_batches: 250
 
 datamodule:
   input_da:
@@ -24,7 +24,7 @@ datamodule:
       strides: {time: 1, lat: 40, lon: 40}
       domain_limits: ${domain.train}
       noise: .03
-  dl_kw: {batch_size: 64, num_workers: 4}
+  dl_kw: {batch_size: 256, num_workers: 4}
 
 model:
   opt_fn:
