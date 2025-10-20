@@ -110,8 +110,7 @@ class LazyXrDataset(torch.utils.data.Dataset):
         }
         self._rng = np.random.default_rng()
         self.noise = noise
-        # self.mask = kwargs.get("mask")
-        self.mask = None
+        self.mask = kwargs.get("mask")
 
     def __len__(self):
         size = 1
