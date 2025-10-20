@@ -75,7 +75,7 @@ class DistinctNormDataModule(BaseDataModule):
             self.val_ds,
             shuffle=False,
             batch_size=1,
-            num_workers=1,
+            num_workers=4,
         )
 
 
@@ -88,6 +88,7 @@ class LazyXrDataset(torch.utils.data.Dataset):
         strides=None,
         postpro_fn=None,
         noise=None,
+        noise_type=None,
         *args,
         **kwargs,
     ):
@@ -110,6 +111,7 @@ class LazyXrDataset(torch.utils.data.Dataset):
         }
         self._rng = np.random.default_rng()
         self.noise = noise
+        self.noise_type = noise_type
         self.mask = kwargs.get("mask")
 
     def __len__(self):
@@ -177,10 +179,15 @@ class LazyXrDataset(torch.utils.data.Dataset):
 
         item = item.data.astype(np.float32)
         if self.noise is not None:
-            noise = np.tile(
-                self._rng.uniform(-self.noise, self.noise, item[0].shape), (2, 1, 1, 1)
-            ).astype(np.float32)
-            item = item + noise
+            if self.noise_type == "uniform-constant":
+                noise = self._rng.uniform(
+                    -self.noise, self.noise, item[0].shape
+                ).astype(np.float32)
+            elif self.noise_type == "gaussian+uniform":
+                scale = self._rng.uniform(0.0, self.noise, 1).astype(np.float32)
+                noise = self._rng.normal(0.0, 1.0, item[0].shape).astype(np.float32)
+                noise = scale * noise
+            item[0] = item[0] + noise
         if self.postpro_fn is not None:
             return self.postpro_fn(item)
         return item
