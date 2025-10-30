@@ -98,10 +98,9 @@ class LazyXrDataset(torch.utils.data.Dataset):
         self.ds = ds.sel(**(domain_limits or {}))
         self.patch_dims = patch_dims
         self.strides = strides or {}
-        _dims = ("variable",) + tuple(k for k in ds.dims)
-        _shape = (2,) + tuple(ds[k].shape[0] for k in ds.dims)
+        _dims = ("variable",) + tuple(k for k in self.ds.dims)
+        _shape = (2,) + tuple(self.ds[k].shape[0] for k in self.ds.dims)
         ds_dims = dict(zip(_dims, _shape))
-        # ds_dims = dict(zip(ds.dims, ds.shape))
         self.ds_size = {
             dim: max(
                 (ds_dims[dim] - patch_dims[dim]) // strides.get(dim, 1) + 1,
@@ -109,6 +108,25 @@ class LazyXrDataset(torch.utils.data.Dataset):
             )
             for dim in patch_dims
         }
+
+        self.periodic_dim = kwargs.get('periodic_dim')
+        if self.periodic_dim:
+            patch_criterion = (
+                (ds_dims[self.periodic_dim] - patch_dims[self.periodic_dim])
+                % strides[self.periodic_dim]
+            )
+            if patch_criterion != 0:
+                self.ds_size[self.periodic_dim] += 1
+
+        self.padded_dim = kwargs.get('padded_dim')
+        if self.padded_dim:
+            patch_criterion = (
+                (ds_dims[self.padded_dim] - patch_dims[self.padded_dim])
+                % strides[self.padded_dim]
+            )
+            if patch_criterion != 0:
+                self.ds_size[self.padded_dim] += 1
+
         self._rng = np.random.default_rng()
         self.noise = noise
         self.noise_type = noise_type
@@ -146,33 +164,80 @@ class LazyXrDataset(torch.utils.data.Dataset):
                 self.strides.get(dim, 1) * idx + self.patch_dims[dim],
             )
 
+        _ds = self.ds.isel(**sl)
+
+        # Longitude extension
+        offset_lon = 0
+        if self.periodic_dim:
+            if len(_ds.lon) < self.patch_dims['lon']:
+                offset_lon = self.patch_dims['lon'] - len(_ds.lon)
+                sl['lon'] = slice(
+                    sl['lon'].start - offset_lon, sl['lon'].stop - offset_lon,
+                )
+                _ds = (
+                    self.ds
+                    .isel(time=sl['time'])
+                    .roll(lon=-offset_lon)
+                    .assign_coords(lon=lambda x: x.lon - offset_lon)
+                    .sortby('lon')
+                    .isel({k: v for k, v in sl.items() if k != 'time'})
+                )
+
+        # Latitude extension
+        offset_lat = 0
+        if self.padded_dim:
+            if len(_ds.lat) < self.patch_dims['lat']:
+                offset_lat = self.patch_dims['lat'] - len(_ds.lat)
+                _ds = (
+                    _ds
+                    .pad(
+                        pad_width=dict(lat=(0, offset_lat)),
+                        mode='constant',
+                        constant_values=np.nan,
+                    )
+                )
+
         if self.mask is not None:
             start, stop = sl["time"].start % 365, sl["time"].stop % 365
-
             if start > stop:
                 start -= stop
-
                 stop = None
 
             sl_mask = sl.copy()
-
             sl_mask["time"] = slice(start, stop)
 
-            da = self.ds.isel(**sl)
+            _mask = self.mask.isel(time=sl_mask['time'])
+            if offset_lon:
+                _mask = (
+                    _mask
+                    .roll(lon=-offset_lon)
+                    .assign_coords(lon=lambda x: x.lon - offset_lon)
+                    .sortby('lon')
+                )
 
+            _mask = _mask.isel(
+                {k: v for k, v in sl_mask.items() if k != 'time'}
+            )
+
+            if offset_lat:
+                _mask = (
+                    _mask
+                    .pad(
+                        pad_width=dict(lat=(0, offset_lat)),
+                        mode='constant',
+                        constant_values=np.nan,
+                    )
+                )
+
+            _mask = _mask.values
             item = (
-                da.to_dataset(name="tgt")
-                .assign(input=da.where(self.mask.isel(**sl_mask).values))
+                _ds.to_dataset(name="tgt")
+                .assign(input=_ds.where(_mask))
                 .to_array()
                 .sortby("variable")
             )
-
         else:
-            item = (
-                self.ds.isel(**sl)
-                # .to_array()
-                # .sortby('variable')
-            )
+            item = _ds  # .to_array().sortby('variable')
 
         if self.return_coords:
             return item.coords.to_dataset()[list(self.patch_dims)]
@@ -317,15 +382,26 @@ def load_glorys12_data_on_fly_inp(
     tgt = (
         xr.open_dataset(tgt_path)[tgt_var]
         .isel(isel)
-        .rename(latitude="lat", longitude="lon")
     )
+
+    rename = dict()
+    if 'latitude' in tgt:
+        rename['latitude'] = 'lat'
+    if 'longitude' in tgt:
+        rename['longitude'] = 'lon'
+    tgt = tgt.rename(rename)
 
     inp = (
         xr.open_dataset(inp_path)[inp_var]
         .isel(isel)
-        .rename(latitude="lat", longitude="lon")
     )
 
+    rename = dict()
+    if 'latitude' in inp:
+        rename['latitude'] = 'lat'
+    if 'longitude' in inp:
+        rename['longitude'] = 'lon'
+    inp = inp.rename(rename)
     return tgt, inp
 
 
