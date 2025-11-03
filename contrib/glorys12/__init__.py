@@ -380,7 +380,7 @@ def load_glorys12_data_on_fly_inp(
     isel = None  # dict(time=slice(-365 * 2, None))
 
     tgt = (
-        xr.open_dataset(tgt_path)[tgt_var]
+        xr.open_dataset(tgt_path)
         .isel(isel)
     )
 
@@ -389,10 +389,10 @@ def load_glorys12_data_on_fly_inp(
         rename['latitude'] = 'lat'
     if 'longitude' in tgt:
         rename['longitude'] = 'lon'
-    tgt = tgt.rename(rename)
+    tgt = tgt.rename(rename)[tgt_var]
 
     inp = (
-        xr.open_dataset(inp_path)[inp_var]
+        xr.open_dataset(inp_path)
         .isel(isel)
     )
 
@@ -401,7 +401,8 @@ def load_glorys12_data_on_fly_inp(
         rename['latitude'] = 'lat'
     if 'longitude' in inp:
         rename['longitude'] = 'lon'
-    inp = inp.rename(rename)
+    inp = inp.rename(rename)[inp_var]
+
     return tgt, inp
 
 
