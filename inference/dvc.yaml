@@ -14,8 +14,9 @@ stages:
       +period_to=${domain.time.1}
       +input_var=${method.input_var}
       +output_var=${method.output_var}
-      +output_geo_uv=${method.geo_uv}
       +output_dc_format=true
       +batch_size=1
+      +ensemble_noise=${method.ensemble_noise}
+      +ensemble_size=${method.ensemble_size}
       hydra.run.dir=. hydra.output_subdir=null hydra/job_logging=disabled
       hydra/hydra_logging=disabled

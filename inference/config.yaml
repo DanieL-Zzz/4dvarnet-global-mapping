@@ -5,4 +5,4 @@ domain:
   lon: [-186, 186]
 
 paths:
-  output: ./output/
+  output: ./outputs/

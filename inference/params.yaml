@@ -9,7 +9,8 @@ method:
   input_data: data/global_sla_0.25.nc
   input_var: sla_filtered
   output_var: sla
-  geo_uv: false
+  ensemble_size: 10
+  ensemble_noise: .2
 
 dims:
   patch: 15-648-1488

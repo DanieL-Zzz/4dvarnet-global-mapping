@@ -18,7 +18,7 @@ _FDVPATH = ".." # chemin vers installation 4DVarNet contenant contrib glorys
 if _FDVPATH not in sys.path:
     sys.path.append(_FDVPATH)
 
-PredictItem = namedtuple("PredictItem", ("input",))
+PredictItem = namedtuple("PredictItem", ("input", "lon", "lat"))
 _G = 9.81
 _OMEGA = 7.2921e-5
 _LAT_TO_RAD = np.pi / 180.0
@@ -39,8 +39,22 @@ class LitModel(pl.LightningModule):
         self.patcher = patcher
         self.solver = model
         self.norm_stats = norm_stats
+
+        self.ensemble = None
+        if kwargs.get("ensemble_noise") or kwargs.get("ensemble_size"):
+            self.ensemble = dict(
+                size=kwargs.get("ensemble_size", 10),
+                noise=kwargs.get("ensemble_noise", .2),
+            )
+
+            save_dir = save_dir.replace(
+                ".nc",
+                f"-n{self.ensemble['size']}-std{self.ensemble['noise']}.nc",
+            )
+
         self.save_dir = Path(save_dir)
         self.save_dir.parent.mkdir(parents=True, exist_ok=True)
+
         self.out_dims = out_dims
         self.bs = 0
         self.kwargs = kwargs
@@ -49,7 +63,20 @@ class LitModel(pl.LightningModule):
     def predict_step(self, batch, batch_idx: int, *args, **kwargs):
         if batch_idx == 0:
             self.predict_data = []
-        outputs = self.solver(batch)
+
+        if self.ensemble:
+            outputs = 0.
+            for _ in range(self.ensemble["size"]):
+                noise = torch.randn_like(batch.input) * self.ensemble["noise"]
+                noisy_batch = PredictItem(
+                    batch.input + noise,
+                    batch.lon,
+                    batch.lat,
+                )
+                outputs += self.solver(noisy_batch)
+            outputs /= self.ensemble["size"]
+        else:
+            outputs = self.solver(batch)
 
         self.bs = self.bs or outputs.shape[0]
         m, s = self.norm_stats
@@ -136,67 +163,6 @@ class LitModel(pl.LightningModule):
             ) % 360
             final_reconstruction = final_reconstruction.sortby("longitude")
 
-            mdt = (
-                xr.open_dataset("data/MDT_DUACS_0.25deg.nc")
-                .sel(
-                    latitude=slice(
-                        final_reconstruction.latitude[0],
-                        final_reconstruction.latitude[-1] + 0.26,
-                    ),
-                    longitude=slice(
-                        final_reconstruction.longitude[0],
-                        final_reconstruction.longitude[-1] + 0.26,
-                    ),
-                )
-                .mdt
-            )
-
-            mask = mdt.where(mdt.isnull(), 0.0)
-            final_reconstruction = final_reconstruction.interp(
-                coords=dict(
-                    latitude=mask.latitude,
-                    longitude=mask.longitude,
-                ),
-                method="linear",
-            )
-
-            if self.kwargs.get("output_geo_uv", False):
-                if "adt" in final_reconstruction:
-                    _should_create_adt_var = False
-                    _adt_var = "adt"
-                elif "ssh" in final_reconstruction:
-                    _should_create_adt_var = False
-                    _adt_var = "ssh"
-                else:
-                    _should_create_adt_var = True
-                    _adt_var = "adt"
-
-                if _should_create_adt_var:
-                    final_reconstruction = final_reconstruction.assign(
-                        {
-                            # out_var is then supposed to be the sla fields
-                            _adt_var: final_reconstruction[out_var] + mdt
-                        }
-                    )
-
-                final_reconstruction = retreive_geos_velocities(
-                    final_reconstruction,
-                    var=_adt_var,
-                )
-
-                if out_var != "sla":
-                    final_reconstruction = final_reconstruction.assign(
-                        sla=final_reconstruction[_adt_var] - mdt
-                    )
-
-                if _should_create_adt_var:
-                    final_reconstruction = final_reconstruction.drop_vars(_adt_var)
-
-            final_reconstruction = final_reconstruction.assign(
-                {
-                    out_var: final_reconstruction[out_var] + mask,
-                }
-            )
             final_reconstruction.latitude.attrs["units"] = "degrees_north"
             final_reconstruction.longitude.attrs["units"] = "degrees_east"
 
@@ -253,6 +219,23 @@ def _run(cfg):
     devices (int):
         number of GPU to be used
 
+    ensemble_size (int):
+    ensemble_noise (float):
+        if specified, the output will be averaged over `ensemble_size`
+        inferences (gaussian noises of mean 0 and standard deviation
+        `ensemble_noise` will be added to the inputs of each
+        inferences).
+
+        If `ensemble_size` is specified and `ensemble_noise` is not,
+        the default value of `ensemble_noise` will be 0.2.
+
+        If `ensemble_noise` is specified and `ensemble_size` is not,
+        the default value of `ensemble_size` will be 10.
+
+        If none of `ensemble_size` or `ensemble_noise` is specified,
+        the inference will be performed once (equivalent to
+        `ensemble_size`=1 and `ensemble_noise`=0).
+
     input_var (str):
         name of the variable from the input file to use
 
@@ -262,10 +245,6 @@ def _run(cfg):
     num_worker (int):
         number of CPU to use for the data loading. If not specified,
         will be computed on the tracks data
-
-    output_geo_uv (bool):
-        if the geostrophic currents should be deduced or not from the
-        reconstruction
 
     output_var (str):
         name of the variable in the output file
@@ -295,7 +274,11 @@ def _run(cfg):
 
     da = xr.open_dataset(cfg["input"])[cfg.get("input_var", "ssh")].sel(sel)
     postpro_fns = (
-        lambda item: PredictItem._make((item.values.astype(np.float32),)),
+        lambda item: PredictItem._make((
+            item.values.astype(np.float32),
+            item.lon.data.astype(np.float32),
+            item.lat.data.astype(np.float32),
+        )),
         lambda item: item._replace(input=(item.input - mean) / std),
     )
 
@@ -355,7 +338,8 @@ def _run(cfg):
             ),
         ),
         output_dc_format=cfg.get("output_dc_format", False),
-        output_geo_uv=cfg.get("output_geo_uv", False),
+        ensemble_size=cfg.get("ensemble_size"),
+        ensemble_noise=cfg.get("ensemble_noise"),
     )
     trainer.predict(litmod, dataloaders=dl)
 
