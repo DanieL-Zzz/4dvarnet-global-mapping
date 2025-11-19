@@ -2,9 +2,11 @@ method:
   # -------------------------------------------------------------------
   # SLA
   # -------------------------------------------------------------------
-  name: fdvarnet-glo12-sla
-  checkpoint: <chemin_vers_checkpoints>
-  config: ../config/xp/inference-glo12-sla.yaml
+  name: unet-default-best-noensemble
+  # checkpoint: /Odyssey/private/d22zhu/Lab/4dvarnet-global-mapping/outputs/2025-11-04/unet-32lon-21139-17-17-52/ronan/checkpoints/best.ckpt
+  # config: /Odyssey/private/d22zhu/Lab/4dvarnet-global-mapping/outputs/2025-11-04/unet-32lon-21139-17-17-52/.hydra/config.yaml
+  checkpoint: /Odyssey/private/d22zhu/Lab/4dvarnet-global-mapping/outputs/2025-11-12/unet-valnolon-21928-17-32-14/ronan/checkpoints/last.ckpt
+  config: /Odyssey/private/d22zhu/Lab/4dvarnet-global-mapping/outputs/2025-11-12/unet-valnolon-21928-17-32-14/.hydra/config.yaml
 
   input_data: data/global_sla_0.25.nc
   input_var: sla_filtered
