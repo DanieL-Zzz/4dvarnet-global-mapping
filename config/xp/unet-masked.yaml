@@ -1,0 +1,34 @@
+# @package _global_
+
+domain: ???
+ckpt: null
+xpname: ???
+
+
+datamodule:
+  _target_: contrib.glorys12.DistinctNormDataModule
+  input_da:
+    _target_: contrib.glorys12.load_glorys12_data_on_fly_inp
+    tgt_path: /SCRATCH/d22zhu/mask/glorys12_2010_2019_daily_sla_4th.nc
+    tgt_var: sla
+    inp_path: /SCRATCH/d22zhu/mask/mask_6nadirs_4th.nc
+    inp_var: inp
+  xrds_kw:
+    train:
+      patch_dims: {time: 15, lat: 256, lon: 256}
+      strides: {time: 1, lat: 16, lon: 16}
+      domain_limits: ${domain.train}
+      noise: 0.03  # null
+      noise_type: gaussian+uniform
+      periodic_dim: lon
+      padded_dim: lat
+    val:
+      patch_dims: {time: 15, lat: 512, lon: 512}
+      strides: {time: 1, lat: 136, lon: 488}
+      domain_limits: ${domain.train}
+      noise: 0.03  # null
+      noise_type: uniform-constant
+
+defaults:
+  - unet
+  - _self_
