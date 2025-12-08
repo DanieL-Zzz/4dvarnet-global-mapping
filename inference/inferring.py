@@ -312,6 +312,13 @@ def _run(cfg):
 
     resolution = (patcher.da.lat[1] - patcher.da.lat[0]).item()
 
+    ensemble_size = cfg.get("ensemble_size")
+    ensemble_noise = cfg.get("ensemble_noise")
+    if not isinstance(ensemble_size, (int, float)):
+        ensemble_size = None
+    if not isinstance(ensemble_noise, (int, float)):
+        ensemble_noise = None
+
     litmod = LitModel(
         patcher,
         solver,
@@ -338,8 +345,8 @@ def _run(cfg):
             ),
         ),
         output_dc_format=cfg.get("output_dc_format", False),
-        ensemble_size=cfg.get("ensemble_size"),
-        ensemble_noise=cfg.get("ensemble_noise"),
+        ensemble_size=ensemble_size,
+        ensemble_noise=ensemble_noise,
     )
     trainer.predict(litmod, dataloaders=dl)
 
