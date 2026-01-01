@@ -46,7 +46,7 @@ datamodule:
     train:
       time:
         _target_: builtins.slice
-        _args_: ['2010-01-01', '2017-11-30']
+        _args_: ['2010-01-01', '2017-10-31']
     val:
       time:
         _target_: builtins.slice
