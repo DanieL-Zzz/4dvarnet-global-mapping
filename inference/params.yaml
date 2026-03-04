@@ -2,11 +2,11 @@ method:
   # -------------------------------------------------------------------
   # SLA
   # -------------------------------------------------------------------
-  name: fdvarnet-glo12-sla
-  checkpoint: <chemin_vers_checkpoints>
-  config: ../config/xp/inference-glo12-sla.yaml
+  name: fdvarUnet-no-lwe
+  checkpoint: /Odyssey/private/d22zhu/Lab/4dvarnet-global-mapping/outputs/fdvarunet/unet_unrolling_5iter_grad/checkpoints/best.ckpt
+  config: /Odyssey/private/d22zhu/Lab/4dvarnet-global-mapping/outputs/fdvarunet/.hydra/config.yaml
 
-  input_data: data/global_sla_0.25.nc
+  input_data: data/global_sla_0.25_without_lwe.nc
   input_var: sla_filtered
   output_var: sla
   ensemble_size: 10
@@ -15,4 +15,6 @@ method:
 dims:
   patch: 15-648-1488
   stride: 1-200-200
+  # patch: 15-256-256
+  # stride: 1-196-154
   res: .25
